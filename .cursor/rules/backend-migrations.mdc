@@ -1,0 +1,83 @@
+---
+description: TypeORM migration pattern — templates, naming, down methods, raw SQL
+globs: backend/**/migrations/**/*.ts
+alwaysApply: false
+---
+
+# Migration Pattern
+
+Migrations are the ONLY way to change the database schema. Raw SQL via `queryRunner.query()`.
+
+## Naming
+
+File: `{Timestamp}-{DescriptiveName}.ts` (e.g., `1706000001000-CreateThingsTable.ts`)
+Class: `CreateThingsTable1706000001000` with matching `name` property.
+
+## Table Migration Template
+
+```typescript
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class CreateThingsTable1706000001000 implements MigrationInterface {
+  name = 'CreateThingsTable1706000001000';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      CREATE TABLE "things" (
+        "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        "name" VARCHAR(255) NOT NULL,
+        "email" VARCHAR(255) NOT NULL UNIQUE,
+        "description" TEXT,
+        "status" VARCHAR(50) NOT NULL DEFAULT 'active',
+        "metadata" JSONB DEFAULT '{}',
+        "user_id" UUID,
+        "is_active" BOOLEAN NOT NULL DEFAULT true,
+        "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await queryRunner.query(`CREATE INDEX "IDX_things_user_id" ON "things" ("user_id")`);
+    await queryRunner.query(`CREATE INDEX "IDX_things_status" ON "things" ("status")`);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_things_status"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_things_user_id"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "things"`);
+  }
+}
+```
+
+## Junction Table Template
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    CREATE TABLE "thing_categories" (
+      "thing_id" UUID NOT NULL REFERENCES "things"("id") ON DELETE CASCADE,
+      "category_id" UUID NOT NULL REFERENCES "categories"("id") ON DELETE CASCADE,
+      PRIMARY KEY ("thing_id", "category_id")
+    )
+  `);
+  await queryRunner.query(`CREATE INDEX "IDX_thing_categories_thing_id" ON "thing_categories" ("thing_id")`);
+  await queryRunner.query(`CREATE INDEX "IDX_thing_categories_category_id" ON "thing_categories" ("category_id")`);
+}
+```
+
+## Rules
+
+- **Always write `down()` methods.** Reverse order: drop indexes first, then tables.
+- **Never use `synchronize: true`.**
+- **Use raw SQL** via `queryRunner.query()`.
+- **Index naming**: `IDX_{table}_{column}`.
+- **Test locally**: `npm run migration:run` then `npm run migration:revert` before pushing.
+
+## Commands
+
+```bash
+npm run migration:generate -- src/migrations/Name  # Generate from entity diff
+npm run migration:create -- src/migrations/Name     # Empty migration
+npm run migration:run                                # Run pending
+npm run migration:revert                             # Revert last
+npm run migration:show                               # Show status
+```

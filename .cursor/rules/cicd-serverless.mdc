@@ -1,0 +1,73 @@
+---
+description: CI/CD pipelines and Serverless Framework configuration patterns
+globs: ".github/workflows/**/*,backend/serverless.yml,backend/serverless/**/*"
+alwaysApply: false
+---
+
+# CI/CD & Serverless Framework
+
+## GitHub Actions Workflows
+
+### ci.yml — Continuous Integration
+Trigger: Push/PR to `main`. Jobs (parallel):
+- Backend: `npm ci` -> `openapi:generate` -> `typecheck` -> `lint` -> `test`
+- Frontend: `npm ci` -> `openapi:generate` -> `build`
+
+### deploy-{env}.yml — Deployment
+Trigger: Push to `main` (dev), manual dispatch (prod). Sequential:
+1. `terraform validate` + `terraform plan`
+2. `terraform apply` (push to main only)
+3. Serverless Framework deploy (with VPC config + Secrets Manager creds)
+4. Invoke migration Lambda
+5. Deploy frontend
+6. Deployment summary
+
+### db-migrate.yml — Database Migrations
+Manual dispatch. Inputs: `action` (run/show/revert), `environment` (dev/prod).
+
+### Auth: OIDC via IAM role. No long-lived AWS keys in GitHub.
+
+## Serverless Framework
+
+```yaml
+service: {project}-backend
+frameworkVersion: '3'
+provider:
+  runtime: nodejs22.x
+  memorySize: 256
+  timeout: 30
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+
+functions:
+  - ${file(serverless/functions/auth.yml)}
+  - ${file(serverless/functions/health.yml)}
+  - ${file(serverless/functions/{domain}.yml)}
+```
+
+### Function Definition Pattern
+
+```yaml
+# serverless/functions/{domain}.yml
+getThings:
+  handler: src/domains/{domain}/handlers/index.getAll
+  events:
+    - http:
+        path: /things
+        method: get
+        cors: true
+        authorizer:
+          name: authorize
+          resultTtlInSeconds: 300
+```
+
+## Rules
+
+- One YAML per domain in `serverless/functions/`.
+- Lambda Authorizer validates Firebase tokens via JWKS, cached 300s.
+- VPC config from Terraform outputs (Lambda in private subnets).
+- Environment vars from SSM/Secrets Manager, never hardcoded.

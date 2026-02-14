@@ -1,0 +1,52 @@
+---
+description: TypeORM entity pattern — decorators, snake_case columns, UUID PKs, timestamps
+globs: backend/**/entities/**/*.ts
+alwaysApply: false
+---
+
+# Entity Pattern
+
+Entities define the DB schema via TypeORM decorators. snake_case in DB, camelCase in TypeScript.
+
+## Template
+
+```typescript
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+
+@Entity('things')
+export class Thing {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name: string;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'jsonb', default: [] })
+  tags: string[];
+
+  @Column({ type: 'uuid', nullable: true, name: 'user_id' })
+  userId: string | null;
+
+  @Column({ type: 'boolean', name: 'is_active', default: true })
+  isActive: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}
+```
+
+## Rules
+
+- **Table names**: snake_case, plural (`things`, `purchase_orders`).
+- **Column names**: Use `name` option to map camelCase TS to snake_case DB.
+- **Primary keys**: UUID via `@PrimaryGeneratedColumn('uuid')`. Firebase UID uses `@PrimaryColumn({ type: 'varchar', length: 255 })`.
+- **Timestamps**: Always `@CreateDateColumn({ name: 'created_at' })` and `@UpdateDateColumn({ name: 'updated_at' })`.
+- **Soft deletes**: Use explicit `deleted_at` column, not TypeORM's `@DeleteDateColumn`.
+- **JSONB**: For arrays and flexible objects.
+- **Nullables**: Use `nullable: true` and type as `string | null`.

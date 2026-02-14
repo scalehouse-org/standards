@@ -1,0 +1,44 @@
+---
+description: Mapper pattern — pure transform functions between TypeORM entities and OpenAPI schemas
+globs: backend/**/mappers/**/*.ts
+alwaysApply: false
+---
+
+# Mapper Pattern
+
+Mappers are pure functions that transform between TypeORM entities and OpenAPI API schemas. No classes, no side effects.
+
+## Template
+
+```typescript
+import type { components } from '../../../types/api';
+import { resolveImageUrl } from '../../../shared/utils/image-url';
+
+type ApiThing = components['schemas']['Thing'];
+
+export function transformToApiThing(dbThing: any): ApiThing {
+  return {
+    id: dbThing.id,
+    name: dbThing.name,
+    description: dbThing.description || null,
+    imageUrl: dbThing.image ? resolveImageUrl(dbThing.image) : null,
+    createdAt:
+      dbThing.createdAt instanceof Date
+        ? dbThing.createdAt.toISOString()
+        : dbThing.createdAt,
+    updatedAt:
+      dbThing.updatedAt instanceof Date
+        ? dbThing.updatedAt.toISOString()
+        : dbThing.updatedAt,
+  };
+}
+```
+
+## Rules
+
+- Export **pure functions** only.
+- Handle type coercion: `Date` -> ISO string, JSONB parsing, null safety.
+- Use `resolveImageUrl()` for S3 keys that need CloudFront URL resolution.
+- Use OpenAPI generated types: `import type { components } from '../../../types/api'`.
+- Handlers and services import from mappers — never duplicate transform logic.
+- Naming: `transformToApi{Entity}` for entity-to-API transforms.

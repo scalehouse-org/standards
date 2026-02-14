@@ -1,0 +1,50 @@
+---
+description: Core project standards — naming conventions, security rules, and hard anti-patterns that apply everywhere
+alwaysApply: true
+---
+
+# Project-Wide Rules
+
+## Naming Conventions
+
+- **Database**: snake_case for tables (plural) and columns. Examples: `purchase_orders`, `created_at`, `user_id`.
+- **TypeScript**: camelCase for properties. Map with `name` option: `@Column({ name: 'user_id' }) userId: string`.
+- **Files**: `{name}.entity.ts`, `{name}.service.ts`, `{name}.mapper.ts`, handlers always `index.ts`.
+- **Environment variables**: UPPER_SNAKE_CASE (`DB_HOST`, `NEXT_PUBLIC_API_URL`).
+- **Terraform resources**: `{project_name}-{environment}-{descriptor}`.
+
+## Response Envelope
+
+All API responses use this shape:
+
+```typescript
+// Success
+{ "data": T }
+{ "data": T[], "pagination": { "page": 1, "limit": 20, "total": 150 } }
+
+// Error
+{ "error": "message", "details?": unknown }
+```
+
+Always use shared helpers: `success()`, `created()`, `badRequest()`, `notFound()`, `forbidden()`, `unauthorized()`, `serverError()`. Never construct raw `{ statusCode, body, headers }`.
+
+## Security
+
+- No secrets in code, config files, or version control. Use AWS Secrets Manager.
+- Never use `synchronize: true` in TypeORM production config.
+- RDS and ElastiCache in private subnets only.
+- S3 buckets: all public access blocked, CloudFront OAC only.
+- IAM: scoped per-module, no wildcard `*` resource policies.
+- CI/CD: OIDC authentication, no long-lived AWS keys.
+
+## Do NOT
+
+- Use `synchronize: true` in production — migrations are the only way.
+- Manually edit `src/types/api.ts` or `api-types.ts` — auto-generated from OpenAPI.
+- Skip writing migration `down()` methods.
+- Skip updating `openapi.yaml` when changing API contracts.
+- Put business logic in handlers — services own logic.
+- Return database entities directly from handlers — transform through mappers.
+- Construct fetch calls manually in frontend — use `openapi-fetch` with generated types.
+- Use `any` types without a comment justifying why.
+- Store secrets in code or `serverless.yml`.

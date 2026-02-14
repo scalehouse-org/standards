@@ -1,0 +1,83 @@
+---
+description: Terraform standards — modular architecture, variable rules, naming, tagging, security
+globs: infra/terraform/**/*
+alwaysApply: false
+---
+
+# Terraform Standards
+
+Modular architecture under `infra/terraform/`. Each AWS concern is its own module.
+
+## Directory Structure
+
+```
+infra/terraform/
+├── main.tf                   # Root: orchestrates modules
+├── variables.tf / outputs.tf / versions.tf
+├── backend-{env}.hcl        # State backend config per env
+├── environments/
+│   ├── dev.tfvars
+│   └── prod.tfvars
+├── modules/
+│   ├── networking/           # VPC, subnets, NAT, VPC endpoints
+│   ├── security/             # Security groups
+│   ├── rds/                  # PostgreSQL RDS
+│   ├── elasticache/          # Redis ElastiCache
+│   ├── sqs/                  # SQS queues + DLQ
+│   ├── s3-cloudfront/        # S3 + CloudFront CDN (OAC)
+│   ├── iam/                  # IAM roles and policies
+│   └── ssm-tunnel/           # EC2 for secure RDS access
+└── scripts/                  # init.sh, plan.sh, apply.sh, validate.sh, ssh-tunnel.sh
+```
+
+## Module Standard
+
+Every module has `main.tf`, `variables.tf`, `outputs.tf`. No exceptions.
+
+## Variable Rules
+
+- Every variable MUST have `description` and `type`.
+- Provide sensible `default` values.
+- Sensitive values marked `sensitive = true`.
+- Modules receive `common_tags` explicitly.
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "rds_db_password" {
+  description = "Master password for RDS"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+```
+
+## Naming
+
+All resources: `{project_name}-{environment}-{descriptor}`
+
+```hcl
+bucket = "${var.project_name}-${var.environment}-files"
+```
+
+## Tagging
+
+1. Provider `default_tags`: `Project` + `Environment` (automatic).
+2. `common_tags` variable: passed to modules explicitly for additional tags.
+
+## State
+
+Remote in S3 with per-environment keys:
+- `backend-dev.hcl`: `key = "dev/terraform.tfstate"`
+- `backend-prod.hcl`: `key = "prod/terraform.tfstate"`
+
+## Security Rules
+
+- RDS and ElastiCache in private subnets only.
+- S3: all public access blocked, CloudFront OAC.
+- SSM tunnel: no SSH, Systems Manager only.
+- IAM: scoped per-module, no wildcard resources.
+- Secrets in AWS Secrets Manager, never in tfvars.

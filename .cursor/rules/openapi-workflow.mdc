@@ -1,0 +1,40 @@
+---
+description: OpenAPI contract-first workflow — spec is source of truth, types are auto-generated
+globs: "**/openapi.yaml,**/api-types.ts,**/types/api.ts"
+alwaysApply: false
+---
+
+# OpenAPI Contract-First Workflow
+
+`openapi.yaml` is the **single source of truth** for all API communication.
+
+## Workflow
+
+1. **Edit `openapi.yaml` first** — design endpoints and schemas before writing code.
+2. **Generate types**: `npm run openapi:generate` in both backend and frontend.
+3. **Implement backend** using generated types.
+4. **Implement frontend** using `openapi-fetch` with generated `paths` types.
+
+## Using Generated Types
+
+Backend:
+```typescript
+import type { components } from '../../../types/api';
+type Thing = components['schemas']['Thing'];
+type CreateThingRequest = components['schemas']['CreateThingRequest'];
+```
+
+Frontend:
+```typescript
+import type { components } from '@/lib/api-types';
+export type Thing = components['schemas']['Thing'];
+```
+
+## Rules
+
+- **Never hand-edit** `src/types/api.ts` or `src/lib/api-types.ts` — they are auto-generated.
+- **Always update `openapi.yaml` BEFORE** changing API contracts in code.
+- Use `$ref` for reusable schemas.
+- Document all endpoints with descriptions.
+- Include error responses in the spec.
+- Type generation: `npm run openapi:generate` (backend and frontend).

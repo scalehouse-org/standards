@@ -1,0 +1,70 @@
+---
+description: Service pattern — class-based business logic with repository access and custom errors
+globs: backend/**/services/**/*.ts
+alwaysApply: false
+---
+
+# Service Pattern
+
+Services own ALL business logic. They are class-based with a private `getRepository()` method.
+
+## Template
+
+```typescript
+import { Repository } from 'typeorm';
+import { Thing } from '../entities/thing.entity';
+import { getDataSource } from '../../../config/data-source';
+import { ForbiddenError, NotFoundError } from '../../../shared/middleware/errorHandler';
+
+export interface CreateThingDto {
+  name: string;
+  description?: string;
+  userId: string;
+}
+
+export interface UpdateThingDto {
+  name?: string;
+  description?: string;
+}
+
+export class ThingService {
+  private async getRepository(): Promise<Repository<Thing>> {
+    const dataSource = await getDataSource();
+    return dataSource.getRepository(Thing);
+  }
+
+  async findByUserId(userId: string): Promise<Thing[]> {
+    const repository = await this.getRepository();
+    return repository.find({ where: { userId }, order: { createdAt: 'DESC' } });
+  }
+
+  async findById(id: string): Promise<Thing | null> {
+    const repository = await this.getRepository();
+    return repository.findOne({ where: { id } });
+  }
+
+  async create(data: CreateThingDto): Promise<Thing> {
+    const repository = await this.getRepository();
+    const thing = repository.create(data);
+    return repository.save(thing);
+  }
+
+  async update(id: string, data: UpdateThingDto, userId?: string | null): Promise<Thing | null> {
+    const repository = await this.getRepository();
+    const thing = await repository.findOne({ where: { id } });
+    if (!thing) return null;
+    if (userId && thing.userId && thing.userId !== userId) {
+      throw new ForbiddenError('Access denied');
+    }
+    Object.assign(thing, data);
+    return repository.save(thing);
+  }
+}
+```
+
+## Rules
+
+- DTOs are **interfaces**, not classes. Define them in the service file.
+- Throw `ForbiddenError`, `NotFoundError`, etc. — handlers catch and map to responses.
+- Never import response helpers in services. Services return entities or throw errors.
+- Ownership checks and authorization logic live here, not in handlers.

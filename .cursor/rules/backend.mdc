@@ -1,0 +1,58 @@
+---
+description: Backend architecture — domain-driven structure, file layout, barrel exports, new domain checklist
+globs: backend/**/*
+alwaysApply: false
+---
+
+# Backend Architecture
+
+Serverless Framework v3 + AWS Lambda + TypeORM + PostgreSQL. Domain-driven folder structure.
+
+## Domain Structure
+
+Every domain follows this exact layout:
+
+```
+src/domains/{domain}/
+├── entities/{name}.entity.ts
+├── handlers/index.ts
+├── mappers/{name}.mapper.ts
+├── services/{name}.service.ts
+└── index.ts
+```
+
+## Barrel Export
+
+```typescript
+// src/domains/{domain}/index.ts
+export * from './entities/{name}.entity';
+export * from './services/{name}.service';
+export * from './mappers/{name}.mapper';
+export * as handlers from './handlers';
+```
+
+## Separation of Concerns
+
+- **Handlers**: Parse event, validate input, call service, map result, return response. No business logic.
+- **Services**: All business logic, ownership checks, data access via `getRepository()`.
+- **Mappers**: Pure transform functions between TypeORM entities and OpenAPI schemas.
+- **Entities**: TypeORM decorators defining DB schema.
+
+## New Domain Checklist
+
+1. Create domain folder structure under `src/domains/{domain}/`.
+2. Create `serverless/functions/{domain}.yml`.
+3. Import in `serverless.yml`: `- ${file(serverless/functions/{domain}.yml)}`.
+4. Register entity in `src/config/data-source.ts`.
+5. Write migration for new table(s).
+6. Update `openapi.yaml` with endpoints and schemas.
+7. Run `npm run openapi:generate`.
+
+## DataSource
+
+Singleton pattern for Lambda. `max: 1` connection pool. SSL in production. Never `synchronize: true`.
+
+```typescript
+const dataSource = await getDataSource();
+const repo = dataSource.getRepository(Thing);
+```

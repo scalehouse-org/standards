@@ -1,0 +1,77 @@
+---
+description: Frontend architecture — Next.js App Router, openapi-fetch, Firebase Auth, Tailwind CSS v4
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Frontend Architecture
+
+Next.js (App Router) + React + TypeScript (strict) + Tailwind CSS v4 + `openapi-fetch`.
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── (admin)/              # Route group: authenticated pages with sidebar
+│   ├── (full-width-pages)/   # Route group: auth, public pages
+│   │   └── (auth)/           # signin, signup
+│   ├── api/                  # Next.js API routes
+│   │   ├── auth/session/     # POST/DELETE session cookie
+│   │   └── upload/presigned-url/
+│   └── layout.tsx            # Root layout with providers
+├── components/
+│   ├── ui/                   # Generic (button, modal, table)
+│   ├── common/               # Shared business components
+│   ├── {domain}/             # Domain-specific
+│   └── form/                 # Form elements
+├── context/                  # AuthProvider, ThemeProvider, SidebarProvider
+├── hooks/                    # Custom hooks
+├── lib/
+│   ├── api-client.ts         # openapi-fetch client
+│   ├── api-types.ts          # AUTO-GENERATED (never edit)
+│   ├── types.ts              # Re-exported OpenAPI types
+│   ├── config.ts             # Environment config
+│   ├── firebase.ts           # Firebase SDK init (client-only)
+│   └── auth-utils.ts         # Server-side auth helpers
+└── types/
+```
+
+## API Client
+
+```typescript
+import createClient from 'openapi-fetch';
+import type { paths } from './api-types';
+
+export const apiClient = createClient<paths>({ baseUrl: BACKEND_URL });
+
+export function createAuthenticatedClient(token: string) {
+  return createClient<paths>({
+    baseUrl: BACKEND_URL,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+```
+
+No hand-written fetch calls. All API calls go through `openapi-fetch` with generated types.
+
+## Auth Flow
+
+1. Firebase sign-in -> ID token.
+2. POST `/api/auth/session` sets `__session` httpOnly cookie (7-day expiry).
+3. `middleware.ts` checks cookie for protected routes.
+4. API requests use `Authorization: Bearer <token>` header via `createAuthenticatedClient`.
+
+## Styling
+
+- Tailwind CSS v4 with `@theme` in `globals.css`.
+- Prettier with `prettier-plugin-tailwindcss` for class sorting.
+- ESLint: `next/core-web-vitals`.
+- Path aliases: `@/*` -> `./src/*`.
+
+## Rules
+
+- Never edit `api-types.ts` — auto-generated from OpenAPI.
+- Use `openapi-fetch` for all API calls — no raw `fetch()`.
+- Use route groups `(admin)` and `(full-width-pages)` for layout separation.
+- Components in PascalCase: `ThingCard.tsx`, `ThingList.tsx`.

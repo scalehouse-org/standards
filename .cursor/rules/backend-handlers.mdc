@@ -1,0 +1,62 @@
+---
+description: Lambda handler pattern — thin controllers that parse, delegate, and respond
+globs: backend/**/handlers/**/*.ts
+alwaysApply: false
+---
+
+# Handler Pattern
+
+Handlers are thin controllers. Their ONLY job:
+
+1. Parse `APIGatewayProxyEvent` (path params, query params, body, auth context).
+2. Basic input validation (required fields only — complex validation in services).
+3. Call the service.
+4. Map result via mapper.
+5. Return standardized response.
+
+## Template
+
+```typescript
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { success, created, badRequest, notFound, serverError } from '../../../shared/utils/response';
+import { getAuthContext, requireUserId } from '../../../shared/utils/auth';
+import { ThingService } from '../services/thing.service';
+import { transformToApiThing } from '../mappers/thing.mapper';
+
+const thingService = new ThingService();
+
+export const getAll = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const authContext = getAuthContext(event);
+    if (!authContext?.userId) return badRequest('User ID is required');
+
+    const dbThings = await thingService.findByUserId(authContext.userId);
+    return success(dbThings.map(transformToApiThing));
+  } catch (err) {
+    console.error('Error fetching things:', err);
+    return serverError(err instanceof Error ? err.message : 'Unknown error');
+  }
+};
+
+export const create = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const userId = requireUserId(event);
+    const body = JSON.parse(event.body || '{}');
+    if (!body.name) return badRequest('Name is required');
+
+    const dbThing = await thingService.create({ ...body, userId });
+    return created(transformToApiThing(dbThing));
+  } catch (err) {
+    console.error('Error creating thing:', err);
+    return serverError(err instanceof Error ? err.message : 'Unknown error');
+  }
+};
+```
+
+## Rules
+
+- NO business logic in handlers. If you're writing conditional logic beyond input parsing, move it to the service.
+- Always use shared response helpers (`success`, `badRequest`, etc.).
+- Always extract auth via `getAuthContext(event)` or `requireUserId(event)`.
+- Always `console.error` before returning `serverError`.
+- Never import repository or TypeORM in handlers.
